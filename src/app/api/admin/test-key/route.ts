@@ -39,11 +39,10 @@ export async function POST(req: NextRequest) {
     // Test theo từng Provider
     if (provider === 'gemini') {
       const candidates = [
-        'gemini-3.5-flash',
         'gemini-flash-lite-latest',
+        'gemini-3.5-flash',
         'gemini-3.8-flash',
-        'gemini-flash-latest',
-        'gemini-2.5-flash'
+        'gemini-flash-latest'
       ];
 
       for (const model of candidates) {

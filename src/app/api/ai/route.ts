@@ -58,7 +58,7 @@ Cấu trúc JSON bắt buộc:
           "level": "Cơ bản / Cốt lõi / Nâng cao",
           "estTime": "30 phút",
           "summary": "Tóm tắt 1-2 câu",
-          "content": "Nội dung chi tiết bằng Markdown có đề mục, giải thích kỹ",
+          "content": "Nội dung trọng tâm 1-2 đoạn Markdown súc tích. Tuyệt đối không dùng dấu ngoặc kép đôi bên trong giá trị chuỗi, hãy dùng ngoặc đơn ' từ khóa ' hoặc backticks \`code\` để JSON luôn hợp lệ.",
           "prosCons": {
             "pros": ["Ưu điểm 1", "Ưu điểm 2"],
             "cons": ["Nhược điểm / Trade-off 1"]
@@ -69,7 +69,7 @@ Cấu trúc JSON bắt buộc:
     }
   ]
 }`;
-      userPrompt = `Hãy tạo lộ trình học hoàn chỉnh cho chủ đề: "${topic || prompt}". Tạo 3-4 chuyên mục, mỗi chuyên mục 2-3 bài học thực chiến.`;
+      userPrompt = `Hãy tạo lộ trình học hoàn chỉnh cho chủ đề: "${topic || prompt}". Tạo 3 chuyên mục, mỗi chuyên mục 2-3 bài học thực chiến, súc tích và đúng trọng tâm.`;
     } else if (action === 'ask_tutor') {
       systemInstruction = `Bạn là trợ giảng AI thông minh, hỗ trợ giải đáp thắc mắc về kỹ thuật lập trình và thiết kế hệ thống theo ngữ cảnh bài học.
 Hãy giải thích ngắn gọn, dễ hiểu bằng tiếng Việt, có ví dụ minh họa và nêu rõ các đánh đổi (trade-offs).`;
@@ -79,11 +79,10 @@ Hãy giải thích ngắn gọn, dễ hiểu bằng tiếng Việt, có ví dụ
     }
 
     const candidateModels = [
-      'gemini-3.5-flash',
       'gemini-flash-lite-latest',
+      'gemini-3.5-flash',
       'gemini-3.8-flash',
-      'gemini-flash-latest',
-      'gemini-2.5-flash'
+      'gemini-flash-latest'
     ];
 
     let lastError = 'Không thể kết nối đến Gemini API';
@@ -98,8 +97,9 @@ Hãy giải thích ngắn gọn, dễ hiểu bằng tiếng Việt, có ví dụ
           body: JSON.stringify({
             contents: [{ parts: [{ text: `${systemInstruction}\n\n${userPrompt}` }] }],
             generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 3000,
+              temperature: 0.4,
+              maxOutputTokens: 6000,
+              ...(action === 'generate_roadmap' ? { responseMimeType: 'application/json' } : {})
             },
           }),
         });
@@ -110,7 +110,6 @@ Hãy giải thích ngắn gọn, dễ hiểu bằng tiếng Việt, có ví dụ
           break;
         } else {
           lastError = data.error?.message || `Lỗi model ${model}`;
-          // If model deprecated (404) or high demand (503), try next candidate
         }
       } catch (err: any) {
         lastError = err.message || `Lỗi kết nối model ${model}`;
@@ -128,7 +127,19 @@ Hãy giải thích ngắn gọn, dễ hiểu bằng tiếng Việt, có ví dụ
       try {
         const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
         const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-        const parsedRoadmap = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+        const jsonString = jsonMatch ? jsonMatch[0] : cleaned;
+        
+        let parsedRoadmap;
+        try {
+          parsedRoadmap = JSON.parse(jsonString);
+        } catch (initialErr) {
+          // Cố gắng tự sửa lỗi unescaped control characters hoặc newlines trong chuỗi
+          const sanitized = jsonString
+            .replace(/[\x00-\x1F\x7F-\x9F]/g, (c) => (c === '\n' || c === '\r' || c === '\t' ? c : ''))
+            .replace(/\r?\n/g, '\\n');
+          parsedRoadmap = JSON.parse(sanitized);
+        }
+        
         return NextResponse.json({ success: true, roadmap: parsedRoadmap });
       } catch (parseErr: any) {
         return NextResponse.json(
