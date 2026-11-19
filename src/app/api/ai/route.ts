@@ -1,15 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: NextRequest) {
   try {
     const { action, prompt, topic, context } = await req.json();
-    const apiKey = req.headers.get('x-gemini-key') || process.env.GEMINI_API_KEY;
+    let apiKey = req.headers.get('x-gemini-key') || process.env.GEMINI_API_KEY;
+
+    // Nếu không có trong header/env, tìm key đang Active trong admin_ai_keys
+    if (!apiKey) {
+      try {
+        const { data } = await supabase
+          .from('admin_ai_keys')
+          .select('api_key')
+          .eq('is_active', true)
+          .limit(1)
+          .maybeSingle();
+
+        if (data?.api_key) {
+          apiKey = data.api_key;
+        }
+      } catch (e) {}
+    }
 
     if (!apiKey) {
       return NextResponse.json(
         {
           error:
-            'Chưa có GEMINI_API_KEY. Vui lòng cấu hình biến môi trường GEMINI_API_KEY trong file .env.local hoặc trên Vercel.',
+            'Chưa cấu hình AI Key. Hãy vào trang Quản trị /admin để thêm và kích hoạt key AI, hoặc cấu hình GEMINI_API_KEY trên Vercel.',
         },
         { status: 400 }
       );

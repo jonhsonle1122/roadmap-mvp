@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Layers, Sparkles, User, LogOut, CheckCircle2, LayoutDashboard, Map } from 'lucide-react';
+import Link from 'next/link';
+import { Layers, Sparkles, User, LogOut, CheckCircle2, LayoutDashboard, Map, Shield } from 'lucide-react';
 import { isSupabaseConfigured } from '../lib/supabase';
 
 interface NavbarProps {
@@ -115,6 +116,16 @@ export function Navbar({
             <Sparkles className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">AI Generator</span>
           </button>
+
+          {/* Admin Link Button */}
+          <Link
+            href="/admin"
+            title="Trang quản trị & Test Key AI"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-purple-950/30 hover:bg-purple-900/40 border border-purple-500/30 text-purple-300 text-xs font-semibold transition-all"
+          >
+            <Shield className="w-3.5 h-3.5 text-purple-400" />
+            <span>Admin</span>
+          </Link>
 
           {/* User Auth Section */}
           {user ? (
