@@ -36,8 +36,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
     let systemInstruction = '';
     let userPrompt = '';
 
@@ -80,32 +78,64 @@ Hãy giải thích ngắn gọn, dễ hiểu bằng tiếng Việt, có ví dụ
       return NextResponse.json({ error: 'Action không hợp lệ' }, { status: 400 });
     }
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `${systemInstruction}\n\n${userPrompt}` }] }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 3000,
-        },
-      }),
-    });
+    const candidateModels = [
+      'gemini-3.5-flash',
+      'gemini-flash-lite-latest',
+      'gemini-3.8-flash',
+      'gemini-flash-latest',
+      'gemini-2.5-flash'
+    ];
 
-    const data = await response.json();
-    if (!response.ok) {
+    let lastError = 'Không thể kết nối đến Gemini API';
+    let rawText = '';
+
+    for (const model of candidateModels) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `${systemInstruction}\n\n${userPrompt}` }] }],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 3000,
+            },
+          }),
+        });
+
+        const data = await response.json();
+        if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          rawText = data.candidates[0].content.parts[0].text;
+          break;
+        } else {
+          lastError = data.error?.message || `Lỗi model ${model}`;
+          // If model deprecated (404) or high demand (503), try next candidate
+        }
+      } catch (err: any) {
+        lastError = err.message || `Lỗi kết nối model ${model}`;
+      }
+    }
+
+    if (!rawText) {
       return NextResponse.json(
-        { error: data.error?.message || 'Lỗi khi gọi Gemini API' },
-        { status: response.status }
+        { error: lastError },
+        { status: 500 }
       );
     }
 
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
     if (action === 'generate_roadmap') {
-      const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsedRoadmap = JSON.parse(cleaned);
-      return NextResponse.json({ success: true, roadmap: parsedRoadmap });
+      try {
+        const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        const parsedRoadmap = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+        return NextResponse.json({ success: true, roadmap: parsedRoadmap });
+      } catch (parseErr: any) {
+        return NextResponse.json(
+          { error: `Không thể đọc cấu trúc JSON do AI trả về: ${parseErr.message}`, raw: rawText },
+          { status: 500 }
+        );
+      }
     } else {
       return NextResponse.json({ success: true, reply: rawText });
     }

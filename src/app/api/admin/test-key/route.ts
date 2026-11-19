@@ -38,22 +38,37 @@ export async function POST(req: NextRequest) {
 
     // Test theo từng Provider
     if (provider === 'gemini') {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Trả lời đúng 1 chữ: Pong' }] }],
-          generationConfig: { maxOutputTokens: 20 }
-        })
-      });
+      const candidates = [
+        'gemini-3.5-flash',
+        'gemini-flash-lite-latest',
+        'gemini-3.8-flash',
+        'gemini-flash-latest',
+        'gemini-2.5-flash'
+      ];
 
-      const data = await res.json();
-      if (res.ok) {
-        reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'OK';
-        isSuccess = true;
-      } else {
-        errorMessage = data.error?.message || 'Lỗi Gemini API';
+      for (const model of candidates) {
+        try {
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: 'Trả lời đúng 1 chữ: Pong' }] }],
+              generationConfig: { maxOutputTokens: 20 }
+            })
+          });
+
+          const data = await res.json();
+          if (res.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            reply = `${data.candidates[0].content.parts[0].text.trim()} (${model})`;
+            isSuccess = true;
+            break;
+          } else {
+            errorMessage = data.error?.message || `Lỗi Gemini (${model})`;
+          }
+        } catch (err: any) {
+          errorMessage = err.message || `Lỗi kết nối (${model})`;
+        }
       }
     } else if (provider === 'openai' || provider === 'groq' || provider === 'deepseek') {
       const baseURLs: Record<string, { url: string; model: string }> = {
